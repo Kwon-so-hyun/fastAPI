@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API 테스트 페이지</title>
+    <style>
+        body { font-family: sans-serif; line-height: 1.6; padding: 20px; max-width: 800px; margin: auto; }
+        h1, h2 { text-align: center; }
+        .container { background-color: #f4f4f4; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+        label { font-weight: bold; display: block; margin-top: 10px; }
+        input, textarea { width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
+        textarea { height: 100px; }
+        button { background-color: #007bff; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; margin-top: 10px; }
+        button:hover { background-color: #0056b3; }
+        #status, #result { margin-top: 20px; padding: 15px; background-color: #e9ecef; border: 1px solid #ced4da; border-radius: 4px; white-space: pre-wrap; word-wrap: break-word; }
+    </style>
+</head>
+<body>
+
+<h1>📝 FastAPI 테스트 페이지</h1>
+
+<div class="container">
+    <h2>1. 서버 상태</h2>
+    <button onclick="getStatus()">상태 새로고침</button>
+    <div id="status">서버 상태를 확인하세요.</div>
+</div>
+
+<div class="container">
+    <h2>2. 모델 선택</h2>
+    <button onclick="setModel('qwen')">Qwen으로 변경</button>
+    <button onclick="setModel('mis')">MIS로 변경</button>
+</div>
+
+<div class="container">
+    <h2>3. LLM에 질문하기</h2>
+    <form id="askForm">
+        <label for="context">문맥 (Context):</label>
+        <textarea id="context" name="context">너는 사용자에게 도움을 주는 AI 어시스턴트야.</textarea>
+
+        <label for="question">질문 (Question):</label>
+        <input type="text" id="question" name="question" value="안녕? 너는 누구니?">
+
+        <button type="submit">답변 요청</button>
+    </form>
+    <h3>결과:</h3>
+    <div id="result">아직 결과가 없습니다.</div>
+</div>
+
+<script>
+    // 페이지 로드 시 현재 상태를 가져옵니다.
+    window.onload = getStatus;
+
+    // 서버 상태를 가져오는 함수
+    async function getStatus() {
+        const response = await fetch('/status');
+        const data = await response.json();
+        document.getElementById('status').textContent = `상태: ${data.status}\n메시지: ${data.message}\n현재 모델: ${data.current_model}`;
+    }
+
+    // 모델을 변경하는 함수
+    async function setModel(modelName) {
+        const response = await fetch(`/${modelName}`, { method: 'POST' });
+        const data = await response.json();
+        alert(data.message); // 변경 결과를 alert로 표시
+        await getStatus(); // 상태를 다시 로드하여 변경된 모델을 확인
+    }
+
+    // '/ask' API를 호출하는 함수
+    document.getElementById('askForm').addEventListener('submit', async function(event) {
+        event.preventDefault(); // 폼의 기본 제출 동작을 막습니다.
+
+        const context = document.getElementById('context').value;
+        const question = document.getElementById('question').value;
+        const resultDiv = document.getElementById('result');
+
+        resultDiv.textContent = '답변을 기다리는 중...';
+
+        try {
+            const response = await fetch('/ask', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ context, question })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.detail || '알 수 없는 에러');
+            }
+
+            const data = await response.json();
+            resultDiv.textContent = JSON.stringify(data, null, 2);
+
+        } catch (error) {
+            resultDiv.textContent = `오류 발생: ${error.message}`;
+        }
+        await getStatus(); // 질문 후 현재 모델 상태 업데이트
+    });
+</script>
+</body>
+</html>
