@@ -11,14 +11,36 @@
         label { font-weight: bold; display: block; margin-top: 10px; }
         input, textarea { width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
         textarea { height: 100px; }
-        button { background-color: #007bff; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; margin-top: 10px; }
-        button:hover { background-color: #0056b3; }
+
+        /* 이 부분이 수정되었습니다. button과 .button-link 클래스를 함께 스타일링합니다. */
+        button, .button-link {
+            background-color: #007bff;
+            color: white !important; /* 링크의 기본 파란색 글씨를 덮어쓰기 위해 !important를 사용합니다. */
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 10px;
+            text-decoration: none; /* 링크의 밑줄을 제거합니다. */
+            display: inline-block;
+        }
+        button:hover, .button-link:hover {
+            background-color: #0056b3;
+        }
+
         #status, #result { margin-top: 20px; padding: 15px; background-color: #e9ecef; border: 1px solid #ced4da; border-radius: 4px; white-space: pre-wrap; word-wrap: break-word; }
     </style>
 </head>
 <body>
 
 <h1>📝 FastAPI 테스트 페이지</h1>
+
+<div class="container">
+    <h2>API 문서 확인 📜</h2>
+    <p>FastAPI가 자동으로 생성해주는 API 문서를 확인하세요.</p>
+    <a href="/docs" target="_blank" class="button-link">Swagger</a>
+    <a href="/redoc" target="_blank" class="button-link">ReDoc</a>
+</div>
 
 <div class="container">
     <h2>1. 서버 상태</h2>
