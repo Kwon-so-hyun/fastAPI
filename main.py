@@ -1,5 +1,6 @@
 import httpx
-# 이 부분을 수정하거나 추가해주세요.
+import re
+
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
@@ -63,24 +64,17 @@ async def ask_question(request: AskRequest):
     """
     클라이언트로부터 질문(question)과 문맥(context)을 받아
     설정된 LLM 모델 API에 요청을 보내고, 그 결과를 반환합니다.
+    <think> 태그 내용은 제거하고 순수한 답변만 반환합니다.
     """
+    
     # 1. LLM 모델 API에 보낼 프롬프트 구성
     # 요청하신 형식에 맞춰 question과 context를 조합합니다.
-    prompt = f"<|im_start|>system\n{request.context}<|im_end|>\n<|im_start|>user\n{request.question}<|im_end|>\n<|im_start|>assistant"
+    prompt = f"<|im_start|>system{request.context}<|im_end|><|im_start|>user{request.question}<|im_end|><|im_start|>assistant"
 
     # 2. LLM 모델 API에 보낼 요청 본문(payload) 생성
     payload = {
-        "inputs": [
-            {
-                "name": "PROMPT",
-                "shape": [1],
-                "datatype": "BYTES",
-                "data": [prompt]
-            }
-        ],
-        "outputs": [
-            {"name": "RESPONSE"}
-        ]
+        "inputs": [{"name": "PROMPT", "shape": [1], "datatype": "BYTES", "data": [prompt]}],
+        "outputs": [{"name": "RESPONSE"}]
     }
 
     # 3. 비동기 HTTP 클라이언트를 사용하여 LLM API 호출
@@ -90,25 +84,44 @@ async def ask_question(request: AskRequest):
     try:
         async with httpx.AsyncClient() as client:
             response = await client.post(target_url, json=payload, headers=headers, timeout=30.0)
-
-            # LLM 서버가 에러를 반환하면 우리 서버에서도 에러를 발생시킴
             response.raise_for_status()
 
             # 4. LLM 서버로부터 받은 응답 파싱
             response_data = response.json()
+            raw_answer = response_data.get("outputs", [{}])[0].get("data", [""])[0]
 
-            # 응답 구조를 기반으로 최종 답변 추출
-            # 'outputs' 리스트의 첫 번째 요소의 'data' 리스트의 첫 번째 값을 가져옵니다.
-            answer = response_data.get("outputs", [{}])[0].get("data", [""])[0]
+            # 정규표현식을 사용해 <think>와 </think> 사이의 모든 내용을 제거하고, 앞뒤 공백도 제거합니다.
+            answer = re.sub(r'<think>.*?</think>', '', raw_answer, flags=re.DOTALL).strip()
+            
+            # 6. "answer" 키만 포함하여 최종 응답 반환
+            return {"answer": answer}
 
-            return {"answer": answer, "model_used": CURRENT_MODEL}
+    except httpx.HTTPStatusError as e:
+        error_detail = f"LLM 모델 서버 응답 에러: {e.response.status_code}, 내용: {e.response.text}"
+        await send_google_chat_alert(
+            status_code=e.response.status_code,
+            error_message=error_detail,
+            question=request.question
+        )
+        raise HTTPException(status_code=e.response.status_code, detail=error_detail)
 
     except httpx.RequestError as e:
-        # LLM 서버 호출 중 네트워크 관련 에러 발생 시
-        raise HTTPException(status_code=503, detail=f"LLM 모델 서버({e.request.url}) 호출에 실패했습니다.")
+        error_detail = f"LLM 모델 서버({e.request.url}) 호출에 실패했습니다."
+        await send_google_chat_alert(
+            status_code=503,
+            error_message=error_detail,
+            question=request.question
+        )
+        raise HTTPException(status_code=503, detail=error_detail)
+
     except Exception as e:
-        # 기타 예외 처리
-        raise HTTPException(status_code=500, detail=f"알 수 없는 오류가 발생했습니다: {str(e)}")
+        error_detail = f"알 수 없는 오류가 발생했습니다: {str(e)}"
+        await send_google_chat_alert(
+            status_code=500,
+            error_message=error_detail,
+            question=request.question
+        )
+        raise HTTPException(status_code=500, detail=error_detail)
 
     # ----------------------------------------------------
 # 5. 웹 프론트엔드 제공 (이 부분이 있는지 확인!)
